@@ -11,17 +11,23 @@ import (
 	c "github.com/TwiN/go-color"
 )
 
-type AddrSet = map[string]*net.UDPAddr
+type (
+	AddrSet = map[string]*net.UDPAddr
+	Server  struct {
+		*net.UDPConn
+	}
+)
 
 var (
 	local       = net.IPv6loopback
 	laddr       *net.UDPAddr
-	server      *net.UDPConn
 	unconfirmed = make(AddrSet)
 	confirmed   = make(AddrSet)
+	types       = map[byte]string{
+		'H': "Hello!",
+		'D': "Discovery",
+	}
 )
-
-var gossip = []byte("Hello!") // broadcasted to confirmed nodes every second
 
 func vis(port int) string {
 	return fmt.Sprintf("%d", port-10000)
@@ -38,37 +44,33 @@ func allNodes() AddrSet {
 	return all
 }
 
-func broadcast(msgType byte, msg []byte) {
-	for _, host := range confirmed {
-		fmt.Println(c.InPurple(fmt.Sprintf("  To node %s: %s", vis(host.Port), msg)))
+func (s Server) send(node *net.UDPAddr, msgType byte, msg []byte) {
+	fmt.Println(c.InPurple(fmt.Sprintf("  To node %s: %s", vis(node.Port), types[msgType])))
+	s.WriteToUDP(append([]byte{msgType}, msg...), node) // did it send or not? idk, yolo, UDP BABYYYY
+}
 
-		_, err := server.WriteToUDP(append([]byte{msgType}, msg...), host)
-		if err != nil {
-			panic(err)
-		}
+func (s Server) broadcast(msgType byte, msg []byte) {
+	for _, node := range confirmed {
+		s.send(node, msgType, msg)
 	}
 }
 
-func network() {
-	for _, host := range unconfirmed {
+func (s Server) network() {
+	for _, node := range unconfirmed {
 		w := new(bytes.Buffer)
 		enc := gob.NewEncoder(w)
 		nodes := allNodes()
-		delete(nodes, host.String())
+		delete(nodes, node.String()) // remove the other
 		enc.Encode(nodes)
 
-		fmt.Println(c.InPurple(fmt.Sprintf("  To node %s: You know these guys?", vis(host.Port))))
-
-		_, err := server.WriteToUDP(append([]byte{1}, w.Bytes()...), host)
-		if err != nil {
-			panic(err)
-		}
+		s.send(node, 'D', w.Bytes())
 	}
 }
 
 func main() {
 	if len(os.Args) < 1 {
-		panic("needs arg")
+		fmt.Println(c.InRed("Too few arguments provided"))
+		os.Exit(2)
 	}
 
 	var lport int
@@ -76,11 +78,13 @@ func main() {
 	lport += 10000
 	laddr = &net.UDPAddr{IP: local, Port: lport}
 
-	var err error
-	server, err = net.ListenUDP("udp", laddr)
+	server, err := net.ListenUDP("udp", laddr)
 	if err != nil {
-		panic(err)
+		fmt.Println(c.InRed("Error while starting server:"), err)
+		os.Exit(1)
 	}
+	s := Server{server}
+
 	fmt.Println("I am node", vis(lport))
 
 	for _, v := range os.Args[2:] {
@@ -90,7 +94,8 @@ func main() {
 		addr := &net.UDPAddr{IP: local, Port: port + 10000}
 
 		if addr.String() == laddr.String() {
-			panic("given own port as arg")
+			fmt.Println(c.InRed("Server's own address was given as a starting address"))
+			os.Exit(2)
 		}
 		unconfirmed[addr.String()] = addr
 	}
@@ -98,21 +103,23 @@ func main() {
 
 	go func() {
 		for {
-			network()
-			broadcast(0, gossip)
+			s.network()
+			s.broadcast('H', []byte{})
 			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	for {
 		req := make([]byte, 1024)
-		n, addr, _ := server.ReadFromUDP(req)
+		n, addr, _ := s.ReadFromUDP(req)
 		reqType := req[0]
 		req = req[1:n]
 
 		switch reqType {
-		case 1: // distribute
-			fmt.Println(c.InBlue(fmt.Sprintf("From node %s: You know these guys?", vis(addr.Port))))
+		case 'H': // gossip
+			fmt.Println(c.InGreen(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['H'])))
+		case 'D': // discovery
+			fmt.Println(c.InBlue(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['D'])))
 
 			var newUnconfirmed AddrSet
 			w := bytes.NewReader(req)
@@ -126,9 +133,9 @@ func main() {
 				unconfirmed[i] = v
 				fmt.Println(c.InYellow("Unconfirmed node " + vis(v.Port)))
 			}
-
-		default: // gossip
-			fmt.Println(c.InGreen(fmt.Sprintf("From node %s: %s", vis(addr.Port), req)))
+			s.network()
+		default: // unknown
+			fmt.Println(c.InGreen(fmt.Sprintf("From node %s: Unknown message", vis(addr.Port))))
 		}
 
 		if addr.String() == laddr.String() || confirmed[addr.String()] != nil {
