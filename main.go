@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"encoding/gob" // don't get used to it.
+	"encoding/gob" // don't get used to it. here until we figure out a better address format
 	"fmt"
 	"net"
 	"os"
@@ -12,18 +12,22 @@ import (
 )
 
 type (
-	AddrSet = map[string]*net.UDPAddr
+	Node struct {
+		addr      *net.UDPAddr
+		confirmed bool
+	}
+	AddrSet = map[string]*net.UDPAddr // hash map with addr.String() as the key (works??)
+	NodeSet = map[string]*Node
 	Server  struct {
 		*net.UDPConn
 	}
 )
 
 var (
-	local       = net.IPv6loopback
-	laddr       *net.UDPAddr
-	unconfirmed = make(AddrSet)
-	confirmed   = make(AddrSet)
-	types       = map[byte]string{
+	local      = net.IPv6loopback
+	laddr      *net.UDPAddr
+	knownNodes = make(NodeSet)
+	types      = map[byte]string{
 		'H': "Hello!",
 		'D': "Discovery",
 	}
@@ -33,38 +37,95 @@ func vis(port int) string {
 	return fmt.Sprintf("%d", port-10000)
 }
 
-func allNodes() AddrSet {
-	all := make(AddrSet)
-	for i, v := range unconfirmed {
-		all[i] = v
+func getNodes(confirmed bool) AddrSet {
+	set := make(AddrSet)
+	for i, v := range knownNodes {
+		if v.confirmed == confirmed {
+			set[i] = v.addr
+		}
 	}
-	for i, v := range confirmed {
-		all[i] = v
-	}
-	return all
+	return set
 }
 
 func (s Server) send(node *net.UDPAddr, msgType byte, msg []byte) {
 	fmt.Println(c.InPurple(fmt.Sprintf("  To node %s: %s", vis(node.Port), types[msgType])))
-	s.WriteToUDP(append([]byte{msgType}, msg...), node) // did it send or not? idk, yolo, UDP BABYYYY
+	s.WriteToUDP(append([]byte{msgType}, msg...), node) // did it send or not? idk, who cares, yolo, UDP BABYYYY
 }
 
 func (s Server) broadcast(msgType byte, msg []byte) {
-	for _, node := range confirmed {
+	for _, node := range getNodes(true) {
 		s.send(node, msgType, msg)
 	}
 }
 
 func (s Server) network() {
-	for _, node := range unconfirmed {
+	for _, node := range getNodes(false) {
 		w := new(bytes.Buffer)
 		enc := gob.NewEncoder(w)
-		nodes := allNodes()
-		delete(nodes, node.String()) // remove the other
+
+		// copy knownNodes map
+		nodes := make(NodeSet, len(knownNodes))
+		for i, v := range knownNodes {
+			if i != node.String() { // except the one we're sending to
+				nodes[i] = v
+			}
+		}
+
 		enc.Encode(nodes)
+		s.send(node, 'D', w.Bytes())
+	}
+}
+
+func SendLoop(s Server) {
+	s.network()
+	s.broadcast('H', []byte{})
+	time.Sleep(1 * time.Second)
+}
+
+func ReceiveLoop(s Server) {
+	req := make([]byte, 1024)
+	n, addr, _ := s.ReadFromUDP(req)
+	reqType, content := req[0], req[1:n]
+
+	switch reqType {
+	case 'H': // gossip
+		fmt.Println(c.InGreen(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['H'])))
+	case 'D': // discovery
+		fmt.Println(c.InBlue(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['D'])))
+
+		var newNodes AddrSet // all discovered nodes are unconfirmed at first
+		w := bytes.NewReader(content)
+		dec := gob.NewDecoder(w)
+		dec.Decode(&newNodes)
+
+		for i, v := range newNodes {
+			if v.String() == laddr.String() || knownNodes[i] != nil {
+				continue
+			}
+			knownNodes[i] = &Node{v, false}
+			fmt.Println(c.InYellow("Unconfirmed node " + vis(v.Port)))
+		}
+		s.network()
+	default: // unknown
+		fmt.Println(c.InGreen(fmt.Sprintf("From node %s: Unknown message", vis(addr.Port))))
+	}
+
+	if addr.String() == laddr.String() || getNodes(true)[addr.String()] != nil {
+		return
+	}
+	fmt.Println(c.InYellow("  Confirmed node " + vis(addr.Port))) // log here beacuse makes sense
+
+	// tell other nodes about new confirmed node...
+	for _, node := range getNodes(true) {
+		w := new(bytes.Buffer)
+		enc := gob.NewEncoder(w)
+		enc.Encode(AddrSet{addr.String(): addr})
 
 		s.send(node, 'D', w.Bytes())
 	}
+
+	// ...BEFORE adding it to our confirmed nodes, to avoid infinite network loops (the worst kind of loops)
+	knownNodes[addr.String()] = &Node{addr, true}
 }
 
 func main() {
@@ -97,52 +158,17 @@ func main() {
 			fmt.Println(c.InRed("Server's own address was given as a starting address"))
 			os.Exit(2)
 		}
-		unconfirmed[addr.String()] = addr
+		knownNodes[addr.String()] = &Node{addr, false}
 	}
-	fmt.Println(len(unconfirmed), "unconfirmed nodes known")
+	fmt.Println(len(getNodes(false)), "unconfirmed nodes known")
 
 	go func() {
 		for {
-			s.network()
-			s.broadcast('H', []byte{})
-			time.Sleep(1 * time.Second)
+			SendLoop(s)
 		}
 	}()
 
 	for {
-		req := make([]byte, 1024)
-		n, addr, _ := s.ReadFromUDP(req)
-		reqType := req[0]
-		req = req[1:n]
-
-		switch reqType {
-		case 'H': // gossip
-			fmt.Println(c.InGreen(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['H'])))
-		case 'D': // discovery
-			fmt.Println(c.InBlue(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['D'])))
-
-			var newUnconfirmed AddrSet
-			w := bytes.NewReader(req)
-			dec := gob.NewDecoder(w)
-			dec.Decode(&newUnconfirmed)
-
-			for i, v := range newUnconfirmed {
-				if confirmed[i].String() == laddr.String() || unconfirmed[i] != nil || confirmed[i] != nil {
-					continue
-				}
-				unconfirmed[i] = v
-				fmt.Println(c.InYellow("Unconfirmed node " + vis(v.Port)))
-			}
-			s.network()
-		default: // unknown
-			fmt.Println(c.InGreen(fmt.Sprintf("From node %s: Unknown message", vis(addr.Port))))
-		}
-
-		if addr.String() == laddr.String() || confirmed[addr.String()] != nil {
-			continue
-		}
-		fmt.Println(c.InYellow("  Confirmed node " + vis(addr.Port)))
-		delete(unconfirmed, addr.String())
-		confirmed[addr.String()] = addr
+		ReceiveLoop(s)
 	}
 }
