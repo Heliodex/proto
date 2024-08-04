@@ -31,6 +31,7 @@ var (
 		'H': "Hello!",
 		'D': "Discovery",
 	}
+	lport int
 )
 
 func vis(port int) string {
@@ -49,6 +50,8 @@ func getNodes(confirmed bool) AddrSet {
 
 func (s Server) send(node *net.UDPAddr, msgType byte, msg []byte) {
 	fmt.Println(c.InPurple(fmt.Sprintf("  To node %s: %s", vis(node.Port), types[msgType])))
+	notify(lport, "Send")
+
 	s.WriteToUDP(append([]byte{msgType}, msg...), node) // did it send or not? idk, who cares, yolo, UDP BABYYYY
 }
 
@@ -90,8 +93,10 @@ func ReceiveLoop(s Server) {
 	switch reqType {
 	case 'H': // gossip
 		fmt.Println(c.InGreen(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['H'])))
+		notify(lport, "Receive")
 	case 'D': // discovery
 		fmt.Println(c.InBlue(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['D'])))
+		notify(lport, types['D'])
 
 		var newNodes AddrSet // all discovered nodes are unconfirmed at first
 		w := bytes.NewReader(content)
@@ -108,12 +113,14 @@ func ReceiveLoop(s Server) {
 		s.network()
 	default: // unknown
 		fmt.Println(c.InGreen(fmt.Sprintf("From node %s: Unknown message", vis(addr.Port))))
+		notify(lport, "Unknown message")
 	}
 
 	if addr.String() == laddr.String() || getNodes(true)[addr.String()] != nil {
 		return
 	}
 	fmt.Println(c.InYellow("  Confirmed node " + vis(addr.Port))) // log here beacuse makes sense
+	notify(lport, "Confirmed")
 
 	// tell other nodes about new confirmed node...
 	for _, node := range getNodes(true) {
@@ -134,7 +141,6 @@ func main() {
 		os.Exit(2)
 	}
 
-	var lport int
 	fmt.Sscanf(os.Args[1], "%d", &lport)
 	lport += 10000
 	laddr = &net.UDPAddr{IP: local, Port: lport}
@@ -160,7 +166,9 @@ func main() {
 		}
 		knownNodes[addr.String()] = &Node{addr, false}
 	}
-	fmt.Println(len(getNodes(false)), "unconfirmed nodes known")
+	msg := fmt.Sprintf("%d unconfirmed nodes known", len(getNodes(false)))
+	fmt.Println(msg)
+	notify(lport, msg)
 
 	go func() {
 		for {

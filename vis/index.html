@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Document</title>
+	</head>
+	<body>
+		<script defer src="/script.js"></script>
+
+		<div id="circle">
+			<div class="node">
+				<div class="nodenode"></div>
+			</div>
+		</div>
+
+		<style>
+			:root,
+			body {
+				margin: 0;
+				background: #111;
+				color: white;
+				height: 100%;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			#circle {
+				--size: min(60vw, 60vh);
+				position: absolute;
+				border-radius: 50%;
+				width: var(--size);
+				height: var(--size);
+				top: 50%;
+				left: 50%;
+				transform: translate(-50%, -50%);
+				background: #222;
+			}
+
+			.node {
+				--nodesize: 4rem;
+				position: relative;
+				top: 50%;
+			}
+			.nodenode {
+				position: absolute;
+				border-radius: 50%;
+				width: var(--nodesize);
+				height: var(--nodesize);
+				transform: translate(-50%, -50%);
+				background: #666;
+			}
+		</style>
+	</body>
+</html>
