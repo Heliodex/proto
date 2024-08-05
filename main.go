@@ -100,8 +100,7 @@ func ReceiveLoop(s Server) {
 
 		var newNodes AddrSet // all discovered nodes are unconfirmed at first
 		w := bytes.NewReader(content)
-		dec := gob.NewDecoder(w)
-		dec.Decode(&newNodes)
+		gob.NewDecoder(w).Decode(&newNodes)
 
 		for i, v := range newNodes {
 			if v.String() == laddr.String() || knownNodes[i] != nil {
@@ -125,8 +124,7 @@ func ReceiveLoop(s Server) {
 	// tell other nodes about new confirmed node...
 	for _, node := range getNodes(true) {
 		w := new(bytes.Buffer)
-		enc := gob.NewEncoder(w)
-		enc.Encode(AddrSet{addr.String(): addr})
+		gob.NewEncoder(w).Encode(AddrSet{addr.String(): addr})
 
 		s.send(node, 'D', w.Bytes())
 	}

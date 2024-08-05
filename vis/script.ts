@@ -18,16 +18,33 @@ const getRealNode = (i: number) =>
 
 let i = 0
 
+const path = document.getElementById("path") as unknown as SVGPathElement
+if (!path) throw new Error("no path")
+let p1 = new DOMRect(0, 0)
+let p2 = new DOMRect(0, 0)
+
+const getPath = () =>
+	`M${Math.round(p1.x)} ${Math.round(p1.y)} ${Math.round(p2.x)} ${Math.round(
+		p2.y
+	)}`
+
 function update() {
 	requestAnimationFrame(update)
 	const diff = 360 / nodes.length
 	// type shenanigans
-	for (let j = 0; j < nodes.length; j++)
+	for (let j = 0; j < nodes.length; j++) {
 		nodes[j].style.rotate = `${(i + diff * j) % 360}deg`
+	}
+
+	p1 = nodes[0].getBoundingClientRect()
+	p2 = nodes[1].getBoundingClientRect()
+
+	path.setAttribute("d", getPath())
 	i++
 }
 requestAnimationFrame(update)
 
+// thanks jrchibald archibald
 const doubleRaf = (f: () => void) =>
 	requestAnimationFrame(() => {
 		requestAnimationFrame(f)

@@ -27,8 +27,7 @@ func notify(Address int, Type string) {
 		Test:    "hello",
 	})
 
-	_, err := http.Post(addr, "application/json", w)
-	if err != nil {
+	if _, err := http.Post(addr, "application/json", w); err != nil {
 		fmt.Println(c.InRed("Failed to notify"), err)
 	}
 }
