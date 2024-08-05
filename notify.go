@@ -16,18 +16,33 @@ type Notification struct {
 	Type    string
 	Test    string
 }
+type SendNotification struct {
+	Address int
+	Type    string
+	To      int
+}
 
-func notify(Address int, Type string) {
+func sendNotification(data any) {
 	w := new(bytes.Buffer)
-	enc := json.NewEncoder(w)
-
-	enc.Encode(Notification{
-		Address: Address - 10000,
-		Type:    Type,
-		Test:    "hello",
-	})
+	json.NewEncoder(w).Encode(data)
 
 	if _, err := http.Post(addr, "application/json", w); err != nil {
 		fmt.Println(c.InRed("Failed to notify"), err)
 	}
+}
+
+func notify(Type string) {
+	sendNotification(Notification{
+		Address: lport - 10000,
+		Type:    Type,
+		Test:    "hello",
+	})
+}
+
+func notifySend(To int) {
+	sendNotification(SendNotification{
+		Address: lport - 10000,
+		Type:    "Send",
+		To:      To - 10000,
+	})
 }
