@@ -1,27 +1,34 @@
 const circle = document.getElementById("circle")
-const nodes = [...document.getElementsByClassName("node")]
+if (!circle) throw new Error("no circle")
+
+const nodes: HTMLElement[] = [
+	...(document.getElementsByClassName("node") as unknown as any[]),
+]
 
 const maxNodes = 2
 // there's already 1
 for (let i = 0; i < maxNodes - 1; i++) {
-	const currentNode = nodes[i].cloneNode(true)
+	const currentNode = nodes[i].cloneNode(true) as HTMLElement
 	nodes.push(currentNode)
 	circle.appendChild(currentNode)
 }
 
-const getRealNode = i => nodes[i].getElementsByClassName("nodenode")[0]
+const getRealNode = (i: number) =>
+	nodes[i].getElementsByClassName("nodenode")[0] as HTMLElement
 
 let i = 0
 
 function update() {
 	requestAnimationFrame(update)
 	const diff = 360 / nodes.length
-	for (const j in nodes) nodes[j].style.rotate = `${(i + diff * j) % 360}deg`
+	// type shenanigans
+	for (let j = 0; j < nodes.length; j++)
+		nodes[j].style.rotate = `${(i + diff * j) % 360}deg`
 	i++
 }
 requestAnimationFrame(update)
 
-const doubleRaf = f =>
+const doubleRaf = (f: () => void) =>
 	requestAnimationFrame(() => {
 		requestAnimationFrame(f)
 	})
