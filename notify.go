@@ -13,13 +13,13 @@ const addr = "http://localhost:3000/notify"
 
 type Notification struct {
 	Address int
-	Type    string
-	Test    string
+	Type string
+	Test string
 }
 type SendNotification struct {
 	Address int
-	Type    string
-	To      int
+	Type string
+	To int
 }
 
 func sendNotification(data any) {
@@ -34,15 +34,15 @@ func sendNotification(data any) {
 func notify(Type string) {
 	sendNotification(Notification{
 		Address: lport - 10000,
-		Type:    Type,
-		Test:    "hello",
+		Type: Type,
+		Test: "hello",
 	})
 }
 
 func notifySend(To int) {
 	sendNotification(SendNotification{
 		Address: lport - 10000,
-		Type:    "Send",
-		To:      To - 10000,
+		Type: "Send",
+		To: To - 10000,
 	})
 }

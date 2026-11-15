@@ -13,21 +13,21 @@ import (
 
 type (
 	Node struct {
-		addr      *net.UDPAddr
+		addr *net.UDPAddr
 		confirmed bool
 	}
 	AddrSet = map[string]*net.UDPAddr // hash map with addr.String() as the key (works??)
 	NodeSet = map[string]*Node
-	Server  struct {
+	Server struct {
 		*net.UDPConn
 	}
 )
 
 var (
-	local      = net.IPv6loopback
-	laddr      *net.UDPAddr
+	local = net.IPv6loopback
+	laddr *net.UDPAddr
 	knownNodes = make(NodeSet)
-	types      = map[byte]string{
+	types = map[byte]string{
 		'H': "Hello!",
 		'D': "Discovery",
 	}
