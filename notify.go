@@ -9,23 +9,25 @@ import (
 	c "github.com/TwiN/go-color"
 )
 
+type (
+	Notification struct {
+		Address int
+		Type, Test string
+	}
+
+	SendNotification struct {
+		Address int
+		Type string
+		To int
+	}
+)
+
 const addr = "http://localhost:3000/notify"
 
-type Notification struct {
-	Address int
-	Type string
-	Test string
-}
-type SendNotification struct {
-	Address int
-	Type string
-	To int
-}
-
 func sendNotification(data any) {
-	w := new(bytes.Buffer)
-	json.NewEncoder(w).Encode(data)
+	w := &bytes.Buffer{}
 
+	json.NewEncoder(w).Encode(data)
 	if _, err := http.Post(addr, "application/json", w); err != nil {
 		fmt.Println(c.InRed("Failed to notify"), err)
 	}
