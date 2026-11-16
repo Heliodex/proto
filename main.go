@@ -74,6 +74,7 @@ func (s Server) network() {
 				nodes[i] = v
 			}
 		}
+
 		enc.Encode(nodes)
 		s.send(node, 'D', w.Bytes())
 	}
@@ -91,10 +92,13 @@ func ReceiveLoop(s Server) {
 	case 'D': // discovery
 		fmt.Println(c.InBlue(fmt.Sprintf("From node %s: %s", vis(addr.Port), types['D'])))
 		notify(types['D'])
+
 		var newNodes AddrSet // all discovered nodes are unconfirmed at first
+
 		w := bytes.NewReader(content)
 
 		gob.NewDecoder(w).Decode(&newNodes)
+
 		for i, v := range newNodes {
 			if v.String() == laddr.String() || knownNodes[i] != nil {
 				continue
@@ -104,6 +108,7 @@ func ReceiveLoop(s Server) {
 
 			fmt.Println(c.InYellow("Unconfirmed node " + vis(v.Port)))
 		}
+
 		s.network()
 	default: // unknown
 		fmt.Println(c.InGreen(fmt.Sprintf("From node %s: Unknown message", vis(addr.Port))))
@@ -113,6 +118,7 @@ func ReceiveLoop(s Server) {
 	if addr.String() == laddr.String() || getNodes(true)[addr.String()] != nil {
 		return
 	}
+
 	fmt.Println(c.InYellow("  Confirmed node " + vis(addr.Port))) // log here beacuse makes sense
 	notify("Confirmed")
 
@@ -141,6 +147,7 @@ func main() {
 		fmt.Println(c.InRed("Too few arguments provided"))
 		os.Exit(2)
 	}
+
 	fmt.Sscanf(os.Args[1], "%d", &lport)
 
 	lport += 10000
@@ -148,6 +155,7 @@ func main() {
 		IP: local,
 		Port: lport,
 	}
+
 	server, err := net.ListenUDP("udp", laddr)
 	if err != nil {
 		fmt.Println(c.InRed("Error while starting server:"), err)
@@ -157,6 +165,7 @@ func main() {
 	s := Server{server}
 
 	fmt.Println("I am node", vis(lport))
+
 	for _, v := range os.Args[2:] {
 		var port int
 

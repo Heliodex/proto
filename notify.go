@@ -28,6 +28,7 @@ func sendNotification(data any) {
 	w := &bytes.Buffer{}
 
 	json.NewEncoder(w).Encode(data)
+
 	if _, err := http.Post(addr, "application/json", w); err != nil {
 		fmt.Println(c.InRed("Failed to notify"), err)
 	}
